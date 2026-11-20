@@ -7,13 +7,22 @@
   vars:
     openbao_ssh_ca_file: /etc/ssh/openbao-user-ca.pub
 
+  vars_prompt:
+    - name: openbao_addr
+      prompt: "OpenBao server URL (for example, https://bao.example.com)"
+      private: false
+
   tasks:
-    - name: Check the target OS and OpenBao HTTPS address
+    - name: Require Ubuntu
       ansible.builtin.assert:
         that:
           - ansible_facts['distribution'] == 'Ubuntu'
-          - (openbao_addr | default('')) is match('^https://[^/?#@\s]+/?$')
-        fail_msg: Use an Ubuntu target and set openbao_addr to its existing OpenBao server's HTTPS origin.
+
+    - name: Require the OpenBao HTTPS address
+      ansible.builtin.assert:
+        that:
+          - (openbao_addr | default('', true)) is match('^https://[^/?#@\s]+/?$')
+        fail_msg: Enter the OpenBao HTTPS origin or pass -e openbao_addr=https://bao.example.com.
 
     - name: Fetch the SSH CA public key over verified HTTPS
       ansible.builtin.uri:
