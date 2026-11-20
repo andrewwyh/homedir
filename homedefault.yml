@@ -1,0 +1,54 @@
+---
+- name: Configure Bash and tmux defaults
+  hosts: all
+  gather_facts: true
+  become: false
+
+  tasks:
+    - name: Add aliases and history settings to Bash
+      ansible.builtin.blockinfile:
+        path: "{{ ansible_facts['user_dir'] }}/.bashrc"
+        create: true
+        marker: '# {mark} ANSIBLE MANAGED HOMEDEFAULTS'
+        block: |
+          alias ll='ls -alh'
+          alias ..='cd ..'
+          alias ...='cd ../..'
+          alias dfh='df -h'
+          alias duh='du -h --max-depth=1'
+          alias gs='git status --short --branch'
+          alias gd='git diff'
+          alias gds='git diff --staged'
+
+          alias ta='tmux new-session -A -s main'
+          alias tls='tmux list-sessions'
+
+          alias dc='docker compose'
+          alias dcu='docker compose up'
+          alias dcud='docker compose up -d'
+          alias dcd='docker compose down'
+          alias dcps='docker compose ps'
+          alias dcl='docker compose logs'
+          alias dclf='docker compose logs -f'
+          alias dcr='docker compose restart'
+          alias dcp='docker compose pull'
+          alias dcb='docker compose build'
+          alias dce='docker compose exec'
+
+          shopt -s histappend
+
+    - name: Add mouse support and key bindings to tmux
+      ansible.builtin.blockinfile:
+        path: "{{ ansible_facts['user_dir'] }}/.tmux.conf"
+        create: true
+        marker: '# {mark} ANSIBLE MANAGED HOMEDEFAULTS'
+        block: |
+          set -g mouse on
+          set -g history-limit 20000
+          set -g base-index 1
+          setw -g pane-base-index 1
+          set -g renumber-windows on
+
+          bind-key '|' split-window -h -c '#{pane_current_path}'
+          bind-key '-' split-window -v -c '#{pane_current_path}'
+          bind-key r source-file ~/.tmux.conf \; display-message 'tmux config reloaded'
