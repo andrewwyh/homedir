@@ -1,0 +1,77 @@
+---
+- name: Enroll Ubuntu with an existing OpenBao SSH certificate authority
+  hosts: all
+  gather_facts: true
+  become: true
+
+  vars:
+    openbao_ssh_ca_file: /etc/ssh/openbao-user-ca.pub
+
+  tasks:
+    - name: Check the target OS and OpenBao HTTPS address
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Ubuntu'
+          - (openbao_addr | default('')) is match('^https://[^/?#@\s]+/?$')
+        fail_msg: Use an Ubuntu target and set openbao_addr to its existing OpenBao server's HTTPS origin.
+
+    - name: Fetch the SSH CA public key over verified HTTPS
+      ansible.builtin.uri:
+        url: "{{ openbao_addr | regex_replace('/+$', '') }}/v1/ssh-client-signer/public_key"
+        return_content: true
+        validate_certs: true
+        follow_redirects: none
+        use_netrc: false
+      register: openbao_ssh_ca
+      check_mode: false
+
+    - name: Check for a single SSH public key
+      ansible.builtin.assert:
+        that:
+          - (openbao_ssh_ca.content | trim) is match('^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521))[ \t]+[A-Za-z0-9+/]+={0,2}([ \t]+[^\r\n]*)?\Z')
+        fail_msg: The OpenBao endpoint did not return a single supported SSH public key.
+
+    - name: Install the Ubuntu OpenSSH server
+      ansible.builtin.apt:
+        name: openssh-server
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Read the effective SSH configuration
+      ansible.builtin.command: /usr/sbin/sshd -T
+      register: openbao_sshd_config
+      changed_when: false
+
+    - name: Protect an existing SSH CA configuration
+      ansible.builtin.assert:
+        that:
+          - "'trustedusercakeys none' in openbao_sshd_config.stdout_lines or ('trustedusercakeys ' ~ openbao_ssh_ca_file) in openbao_sshd_config.stdout_lines"
+        fail_msg: SSH already trusts a CA file at another path. Review that configuration before enrolling.
+      when: not openbao_sshd_config.skipped | default(false)
+
+    - name: Install and validate the OpenBao SSH CA public key
+      ansible.builtin.copy:
+        content: "{{ openbao_ssh_ca.content | trim }}\n"
+        dest: "{{ openbao_ssh_ca_file }}"
+        owner: root
+        group: root
+        mode: '0644'
+        validate: /usr/bin/ssh-keygen -l -f %s
+      notify: Reload Ubuntu SSH
+
+    - name: Configure SSH to trust the OpenBao CA
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        insertbefore: BOF
+        marker: '# {mark} ANSIBLE MANAGED OPENBAO SSH CA'
+        block: "TrustedUserCAKeys {{ openbao_ssh_ca_file }}"
+        backup: true
+        validate: /usr/sbin/sshd -t -f %s
+      notify: Reload Ubuntu SSH
+
+  handlers:
+    - name: Reload Ubuntu SSH
+      ansible.builtin.systemd_service:
+        name: ssh.service
+        state: reloaded

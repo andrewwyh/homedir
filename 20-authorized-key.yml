@@ -1,0 +1,20 @@
+---
+- name: Install an SSH authorized key
+  hosts: all
+  gather_facts: true
+  become: false
+
+  tasks:
+    - name: Require a public key file on the Ansible controller
+      ansible.builtin.assert:
+        that:
+          - ssh_public_key_file is defined
+          - ssh_public_key_file | default('') | length > 0
+        fail_msg: Set ssh_public_key_file to the path of your SSH .pub file.
+
+    - name: Authorize the public key for the connection user
+      ansible.posix.authorized_key:
+        user: "{{ ansible_facts['user_id'] }}"
+        key: "{{ lookup('ansible.builtin.file', ssh_public_key_file) }}"
+        state: present
+        exclusive: false

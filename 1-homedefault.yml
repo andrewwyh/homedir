@@ -19,6 +19,7 @@
           alias gs='git status --short --branch'
           alias gd='git diff'
           alias gds='git diff --staged'
+          alias ans="ansible-playbook -i 'localhost,' -c local"
 
           alias ta='tmux new-session -A -s main'
           alias tls='tmux list-sessions'
@@ -44,10 +45,16 @@
         marker: '# {mark} ANSIBLE MANAGED HOMEDEFAULTS'
         block: |
           set -g mouse on
-          set -g history-limit 20000
+          set -g history-limit 50000
           set -g base-index 1
           setw -g pane-base-index 1
           set -g renumber-windows on
+
+          # Vi copy mode and selection bindings.
+          setw -g mode-keys vi
+          bind -T copy-mode-vi v send-keys -X begin-selection
+          bind -T copy-mode-vi C-v send-keys -X rectangle-toggle
+          bind -T copy-mode-vi V send-keys -X select-line
 
           bind-key '|' split-window -h -c '#{pane_current_path}'
           bind-key '-' split-window -v -c '#{pane_current_path}'
