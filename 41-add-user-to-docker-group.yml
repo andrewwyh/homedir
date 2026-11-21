@@ -1,0 +1,29 @@
+---
+- name: Add the existing user account to the Docker group
+  hosts: all
+  gather_facts: false
+  become: true
+  become_method: sudo
+
+  vars_prompt:
+    - name: ansible_become_password
+      prompt: "Sudo password for the target hosts"
+      private: true
+
+  tasks:
+    - name: Verify the user account exists
+      ansible.builtin.getent:
+        database: passwd
+        key: user
+
+    - name: Verify the Docker group exists
+      ansible.builtin.getent:
+        database: group
+        key: docker
+
+    - name: Add user to the Docker group
+      ansible.builtin.user:
+        name: user
+        groups: docker
+        append: true
+        state: present
